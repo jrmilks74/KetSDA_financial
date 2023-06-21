@@ -24,42 +24,18 @@ options(
 gs4_auth(email = "office@ketsda.org")
 
 Finances <- read_sheet("https://docs.google.com/spreadsheets/d/1DPq4lM36_CcjEGN2v8UE1w1pr-t0C8lenYx56jniNRo/edit#gid=0",
-                       col_types = "Dnnn")
+                       col_types = "Dnnn") %>%
+        mutate(Deficit = Income - Expenses)
 
 Ministry_funds <- read_sheet("https://docs.google.com/spreadsheets/d/1d2g7NRipbarvq78LUxuEObWsTru4t4w_TY9uQgQOvZQ/edit#gid=0")
 Ministry_funds[-1] <- lapply(Ministry_funds[-1], dollar)
-
-cpi_2020 <- bls_api("CUUR0200SA0", startyear = 2020)
-cpi_2010 <- bls_api("CUUR0200SA0", startyear = 2010, endyear = 2019)
-cpi_2000 <- bls_api("CUUR0200SA0", startyear = 2000, endyear = 2009)
-
-cpi <- bind_rows(cpi_2020, cpi_2010, cpi_2000) %>%
-        mutate(periodName = match(periodName, month.name))
-cpi$Date <- as.Date(with(cpi, paste(year, periodName, "01", sep = "-")), "%Y-%m-%d")
-cpi <- cpi %>%
-        arrange(Date) %>%
-        select(Date, value) %>%
-        rename(CPI = value)
-
-Finances <- inner_join(Finances, cpi, by = "Date")
-
-Finances <- Finances %>%
-        mutate(Adj_tithe = Tithe * (first(CPI) / CPI),
-               Adj_income = Income * (first(CPI) / CPI),
-               Adj_expenses = Expenses * (first(CPI) / CPI),
-               Deficit = Income - Expenses,
-               Adj_deficit = Adj_income - Adj_expenses)
 
 Yearly_finances <- Finances %>%
         group_by(Year = floor_date(Date, "year")) %>%
         summarize(Tithe = sum(Tithe),
                   Income = sum(Income),
                   Expenses = sum(Expenses),
-                  Adj_tithe = sum(Adj_tithe),
-                  Adj_income = sum(Adj_income),
-                  Adj_expenses = sum(Adj_expenses),
-                  Deficit = sum(Deficit),
-                  Adj_deficit = sum(Adj_deficit))
+                  Deficit = sum(Deficit))
 
 Finances.tsibble <- Finances %>%
         mutate(Year = year(Date),
@@ -68,23 +44,15 @@ Finances.tsibble <- Finances %>%
                Month, 
                Tithe, 
                Income, 
-               Expenses, 
-               Adj_tithe, 
-               Adj_income, 
-               Adj_expenses,
-               Deficit,
-               Adj_deficit) %>%
+               Expenses,
+               Deficit) %>%
         mutate(Date = paste(Year, Month, sep = " ")) %>%
         mutate(Date = yearmonth(Date)) %>%
         select(Date,
                Tithe,
                Income,
                Expenses,
-               Adj_tithe,
-               Adj_income,
-               Adj_expenses,
-               Deficit,
-               Adj_deficit) %>%
+               Deficit) %>%
         as_tsibble(index = Date)
 
 end <- tail(Yearly_finances$Year)[6]
@@ -192,23 +160,32 @@ function(input, output, session) {
         ## Data sets
         sub_end <- end %m+% years(1)
         
-        Tithe <- Yearly_finances %>%
-                select(Year, Tithe, Adj_tithe) %>%
-                rename(Nominal = Tithe,
-                       Real = Adj_tithe) %>%
+        Tithe_month <- Finances %>%
+                select(Date, Tithe) %>%
+                rename(Nominal = Tithe)
+        
+        Income_month <- Finances %>%
+                select(Date, Income) %>%
+                rename(Nominal = Income)
+        
+        Expenses_month <- Finances %>%
+                select(Date, Expenses) %>%
+                rename(Nominal = Expenses)
+        
+        Tithe_year <- Yearly_finances %>%
+                select(Year, Tithe) %>%
+                rename(Nominal = Tithe) %>%
                 subset(Year < end)
         
-        Income <- Yearly_finances %>%
-                select(Year, Income, Adj_income) %>%
-                rename(Nominal = Income,
-                       Real = Adj_income) %>%
+        Income_year <- Yearly_finances %>%
+                select(Year, Income) %>%
+                rename(Nominal = Income) %>%
                 subset(Year < end)
         
-        Expenses <- Finances %>%
-                select(Date, Expenses, Adj_expenses) %>%
-                rename(Year = Date,
-                       Nominal = Expenses,
-                       Real = Adj_expenses)
+        Expenses_year <- Yearly_finances %>%
+                select(Year, Expenses) %>%
+                rename(Nominal = Expenses) %>%
+                subset(Year < end)
         
         Tithe.tsibble <- Finances.tsibble %>%
                 select(Date, Tithe) %>%
@@ -224,13 +201,22 @@ function(input, output, session) {
         
         ## Subset end point
         ## Reactive elements
-        selected_data <- reactive({
+        Finances_monthly <- reactive({
                 if (input$Category == "Tithe")
-                        Tithe
+                        Tithe_month
                 else if (input$Category == "Income")
-                        Income
+                        Income_month
                 else
-                        Expenses
+                        Expenses_month
+        })
+        
+        Finances_yearly <- reactive({
+                if (input$Category == "Tithe")
+                        Tithe_year
+                else if (input$Category == "Income")
+                        Income_year
+                else
+                        Expenses_year
         })
         
         selected_tsibble <- reactive({
@@ -260,19 +246,30 @@ function(input, output, session) {
                         last_month$Expenses
         })
         
-        ## Time series graph
-        output$time_graph <- renderPlotly({
+        ## Monthly time series graph
+        output$monthly_time_graph <- renderPlotly({
                 
-                p2 <- ggplot(data = selected_data(), aes(x = Year)) +
+                p2 <- ggplot(data = Finances_monthly(), aes(x = Date)) +
                         theme_classic() +
-                        geom_line(aes(y = Nominal, colour = "Nominal")) +
-                        geom_smooth(aes(y = Nominal), method = "loess", formula = y ~ x, colour = "pink") +
-                        geom_line(aes(y = Real, colour = "Real")) +
-                        geom_smooth(aes(y = Real), method = "loess", formula = y ~ x, colour = "blue") +
+                        geom_line(aes(y = Nominal)) +
+                        geom_smooth(aes(y = Nominal), method = "loess", formula = y ~ x) +
                         labs(y = "Dollars",
                              x = "Year",
                              title = "Change over time")
                 ggplotly(p2)
+        })
+        
+        ## Annual time series graph
+        output$annual_time_graph <- renderPlotly({
+                
+                p3 <- ggplot(data = Finances_yearly(), aes(x = Year)) +
+                        theme_classic() +
+                        geom_line(aes(y = Nominal)) +
+                        geom_smooth(aes(y = Nominal), method = "loess", formula = y ~ x) +
+                        labs(y = "Dollars",
+                             x = "Year",
+                             title = "Change over time")
+                ggplotly(p3)
         })
         
         ## Forecast

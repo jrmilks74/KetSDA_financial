@@ -58,8 +58,10 @@ ui <- fluidPage(
                                 mainPanel(
                                         h3("Current and predicted dollar amounts for the year"),
                                         tableOutput("total_amount_table"),
-                                        h3("Change over time"),
-                                        plotlyOutput("time_graph"),
+                                        h3("Monthly change over time"),
+                                        plotlyOutput("monthly_time_graph"),
+                                        h3("Annual change over time"),
+                                        plotlyOutput("annual_time_graph"),
                                         h3("Forecast"),
                                         plotOutput("forecast_graph"),
                                         tableOutput("forecast_table")
