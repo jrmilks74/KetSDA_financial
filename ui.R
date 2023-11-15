@@ -10,12 +10,13 @@
 # Kettering Adventist Church
 # Kettering, Ohio, USA
 #
-# Author: James Milks
+# Author: James Ryan Milks, Dayton, Ohio, USA
 # Date: June 6, 2023
 
 library(shiny)
 library(mailtoR)
 library(plotly)
+library(kableExtra)
 
 # Define user interface
 ui <- fluidPage(
@@ -34,10 +35,13 @@ ui <- fluidPage(
                                         tableOutput("ytdFinances"),
                                         h3("Tithe per month"),
                                         plotlyOutput("seasonal_tithe"),
-                                        h3("Operating income per month"),
+                                        plotlyOutput("seasonal_inflation_adjusted_tithe"),
+                                        h3("Church budget income per month"),
                                         plotlyOutput("seasonal_income"),
-                                        h3("Operating expenses per month"),
+                                        plotlyOutput("seasonal_inflation_adjusted_income"),
+                                        h3("Church budget expenses per month"),
                                         plotlyOutput("seasonal_expenses"),
+                                        plotlyOutput("seasonal_inflation_adjusted_expenses"),
                                         width = 12
                                 )
                         )
@@ -51,8 +55,8 @@ ui <- fluidPage(
                                         selectInput(inputId = "Category",
                                                     label = "Select a category",
                                                     choices = list("Tithe" = "Tithe",
-                                                                "Operating Income" = "Income",
-                                                                "Operating Expenses" = "Expenses"),
+                                                                "Church Budget Income" = "Income",
+                                                                "Church Budget Expenses" = "Expenses"),
                                                     selected = "Tithe")
                                 ),
                                 mainPanel(
