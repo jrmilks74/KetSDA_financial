@@ -11,7 +11,8 @@
 # Kettering, Ohio, USA
 #
 # Author: James Ryan Milks, Dayton, Ohio, USA
-# Date: June 6, 2023
+# Date: 2023 June 6
+# Update: 2024 Feb 25
 
 library(shiny)
 library(mailtoR)
@@ -31,25 +32,17 @@ ui <- fluidPage(
                         sidebarLayout(
                                 sidebarPanel(width = 0),
                                 mainPanel(
-                                        h3("By the numbers"),
-                                        tableOutput("ytdFinances"),
-                                        h3("Tithe per month"),
-                                        plotlyOutput("seasonal_tithe"),
-                                        plotlyOutput("seasonal_inflation_adjusted_tithe"),
-                                        h3("Church budget income per month"),
-                                        plotlyOutput("seasonal_income"),
-                                        plotlyOutput("seasonal_inflation_adjusted_income"),
-                                        h3("Church budget expenses per month"),
-                                        plotlyOutput("seasonal_expenses"),
-                                        plotlyOutput("seasonal_inflation_adjusted_expenses"),
-                                        width = 12
+                                        h3("Month-to-date"),
+                                        tableOutput("mtdFinances"),
+                                        h3("Year-to-date"),
+                                        tableOutput("ytdFinances")
+                                        )
                                 )
-                        )
-                ),
+                        ),
                 
-                # Tithe Focus
+                # In-depth Focus
                 tabPanel(
-                        "Categories",
+                        "In-Depth",
                         sidebarLayout(
                                 sidebarPanel(
                                         selectInput(inputId = "Category",
@@ -64,9 +57,14 @@ ui <- fluidPage(
                                         tableOutput("total_amount_table"),
                                         h3("Monthly change over time"),
                                         plotlyOutput("monthly_time_graph"),
+                                        h3("Seasonal graph"),
+                                        plotlyOutput("seasonal_graph"),
+                                        h3("Seasonal graph adjusted for inflation"),
+                                        plotlyOutput("seasonal_inflation_graph"),
                                         h3("Annual change over time"),
                                         plotlyOutput("annual_time_graph"),
                                         h3("Forecast"),
+                                        plotlyOutput("forcast_vs_actual"),
                                         plotOutput("forecast_graph"),
                                         tableOutput("forecast_table")
                                 )

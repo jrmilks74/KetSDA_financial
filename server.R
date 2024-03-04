@@ -10,6 +10,7 @@
 library(shiny)
 library(googlesheets4)
 library(tidyverse)
+library(plotly)
 library(scales)
 library(fpp3)
 library(urca)
@@ -94,24 +95,100 @@ current_year <- tail(Yearly_finances)[6,] %>%
 last_month <- tail(Finances)[6,] %>%
         select(Tithe, Income, Expenses, Deficit)
 last_month_name <- month.name[as.numeric(format(as.Date(tail(Finances$Date, 13)[13]), "%m"))]
+year_over_year_month <- tail(Finances, 13)[1,] %>%
+        select(Tithe, Income, Expenses, Deficit)
+yoy_change <- data.frame(tithe = current_year$Tithe - year_over_year_month$Tithe,
+                         income = current_year$Income - year_over_year_month$Income,
+                         expenses = current_year$Expenses - year_over_year_month$Expenses,
+                         deficit = current_year$Deficit - year_over_year_month$Deficit)
+yoy_percent_change <- data.frame(tithe = (yoy_change$tithe / year_over_year_month$Tithe),
+                                 income = (yoy_change$income / year_over_year_month$Income),
+                                 expenses = (yoy_change$expenses / year_over_year_month$Expenses),
+                                 deficit = (yoy_change$deficit / year_over_year_month$Deficit))
 
-ytd <- matrix(c(dollar(last_month$Tithe),
+mtd <- matrix(c(dollar(last_month$Tithe),
                 " ",
                 dollar(last_month$Income),
                 dollar(last_month$Expenses),
                 dollar(last_month$Deficit),
-                dollar(current_year$Tithe),
+                dollar(year_over_year_month$Tithe),
                 " ",
-                dollar(current_year$Income),
-                dollar(current_year$Expenses),
-                dollar(current_year$Deficit)
+                dollar(year_over_year_month$Income),
+                dollar(year_over_year_month$Expenses),
+                dollar(year_over_year_month$Deficit),
+                dollar(yoy_change$tithe),
+                " ",
+                dollar(yoy_change$income),
+                dollar(yoy_change$expenses),
+                dollar(yoy_change$deficit),
+                percent(yoy_percent_change$tithe),
+                " ",
+                percent(yoy_percent_change$income),
+                percent(yoy_percent_change$expenses),
+                percent(yoy_percent_change$deficit)
 ),
-ncol = 2,
+ncol = 4,
 byrow = FALSE
 )
 
-colnames(ytd) <- c(last_month_name,
-                   "Year to date")
+colnames(mtd) <- c(paste(last_month_name, end),
+                   paste(last_month_name, (end - 1)),
+                   "Year-over-Year change",
+                   "Year-over-Year percent change")
+
+rownames(mtd) <- c("Tithe",
+                   "Church budget",
+                   "Income",
+                   "Expenses",
+                   "Surplus/Deficit")
+
+month_end <- tail(Finances$Month)[6]
+year_to_date <- Finances %>%
+        filter(Year >= (end - 1),
+               Month <= month_end) %>%
+        select(Year, Tithe, Income, Expenses, Deficit) %>%
+        group_by(Year) %>%
+        summarize(across(c(Tithe, Income, Expenses, Deficit), ~sum(.x, na.rm = TRUE)))
+
+ytd_yoy_change <- data.frame(tithe = year_to_date$Tithe[2] - year_to_date$Tithe[1],
+                             income = year_to_date$Income[2] - year_to_date$Income[1],
+                             expenses = year_to_date$Expenses[2] - year_to_date$Expenses[1],
+                             deficit = year_to_date$Deficit[2] - year_to_date$Deficit[1])
+
+ytd_yoy_percent_change <- data.frame(tithe = ytd_yoy_change$tithe / year_to_date$Tithe[1],
+                                     income = ytd_yoy_change$income / year_to_date$Income[1],
+                                     expenses = ytd_yoy_change$expenses / year_to_date$Expenses[1],
+                                     deficit = ytd_yoy_change$deficit / year_to_date$Deficit[1])
+
+ytd <- matrix(c(dollar(current_year$Tithe),
+                " ",
+                dollar(current_year$Income),
+                dollar(current_year$Expenses),
+                dollar(current_year$Deficit),
+                dollar(year_to_date$Tithe[1]),
+                " ",
+                dollar(year_to_date$Income[1]),
+                dollar(year_to_date$Expenses[1]),
+                dollar(year_to_date$Deficit[1]),
+                dollar(ytd_yoy_change$tithe),
+                " ",
+                dollar(ytd_yoy_change$income),
+                dollar(ytd_yoy_change$expenses),
+                dollar(ytd_yoy_change$deficit),
+                percent(ytd_yoy_percent_change$tithe),
+                " ",
+                percent(ytd_yoy_percent_change$income),
+                percent(ytd_yoy_percent_change$expenses),
+                percent(ytd_yoy_percent_change$deficit)
+),
+ncol = 4,
+byrow = FALSE
+)
+
+colnames(ytd) <- c(paste(end, "to date"),
+                   paste((end - 1), "to date"),
+                   "Year-over-Year change",
+                   "Year-over-Year percent change")
 
 rownames(ytd) <- c("Tithe",
                    "Church budget",
@@ -119,12 +196,27 @@ rownames(ytd) <- c("Tithe",
                    "Expenses",
                    "Surplus/Deficit")
 
+end2 <- paste(end, "-01-01", sep = "")
+Finances.tsibble2 <- Finances %>%
+        filter(Date < end2) %>%
+        select(!Date) %>%
+        mutate(Date = paste(Year, Month, sep = " ")) %>%
+        mutate(Date = yearmonth(Date)) %>%
+        as_tsibble(index = Date)
 
 # Define server logic required each tab
 function(input, output, session) {
         
         # Main tab 
         ## Summary table using kableExtra to specify background, indentation, and formating
+        output$mtdFinances <- function() ({
+                mtd <- kbl(mtd) %>%
+                        kable_styling(bootstrap_options = c("striped"), full_width = F) %>%
+                        add_indent(c(3,4,5)) %>%
+                        column_spec(1, bold = T)
+                mtd
+        })
+        
         output$ytdFinances <- function() ({
                 ytd <- kbl(ytd) %>%
                         kable_styling(bootstrap_options = c("striped"), full_width = F) %>%
@@ -133,118 +225,7 @@ function(input, output, session) {
                 ytd
         })
         
-        ## Tithe overview
-        output$seasonal_tithe <- renderPlotly({
-                this_year <- tail(Yearly_finances$Year)[6]
-                previous_year <- tail(Yearly_finances$Year)[5]
-                t1 <- Finances %>%
-                        mutate(Year = factor(year(Date)),
-                               Date = update(Date, year = 1)) %>%
-                        ggplot(aes(x = Date, y = Tithe, colour = Year)) +
-                        scale_x_date(date_breaks = "1 month", date_labels = "%b") +
-                        geom_line(aes(group = Year), colour = "black", alpha = 0.1) +
-                        geom_line(data = function(x) filter(x, Year == previous_year), lwd = 0.5) +
-                        geom_line(data = function(x) filter(x, Year == this_year), lwd = 0.75) +
-                        theme_bw() +
-                        labs(title = "Nominal tithe",
-                             y = "Dollars",
-                             x = "Month")
-                ggplotly(t1)
-        })
-        
-        output$seasonal_inflation_adjusted_tithe <- renderPlotly({
-                this_year <- tail(Yearly_finances$Year)[6]
-                previous_year <- tail(Yearly_finances$Year)[5]
-                t2 <- Finances %>%
-                        mutate(Year = factor(year(Date)),
-                               Date = update(Date, year = 1)) %>%
-                        ggplot(aes(x = Date, y = AdjTithe, colour = Year)) +
-                        scale_x_date(date_breaks = "1 month", date_labels = "%b") +
-                        geom_line(aes(group = Year), colour = "black", alpha = 0.1) +
-                        geom_line(data = function(x) filter(x, Year == previous_year), lwd = 0.5) +
-                        geom_line(data = function(x) filter(x, Year == this_year), lwd = 0.75) +
-                        theme_bw() +
-                        labs(title = "Inflation-adjusted tithe indexed to Jan 2000",
-                             y = "Dollars",
-                             x = "Month")
-                ggplotly(t2)
-        })
-        
-        ## Income overview
-        output$seasonal_income <- renderPlotly({
-                this_year <- tail(Yearly_finances$Year)[6]
-                previous_year <- tail(Yearly_finances$Year)[5]
-                i1 <- Finances %>%
-                        mutate(Year = factor(year(Date)),
-                               Date = update(Date, year = 1)) %>%
-                        ggplot(aes(x = Date, y = Income, colour = Year)) +
-                        scale_x_date(date_breaks = "1 month", date_labels = "%b") +
-                        geom_line(aes(group = Year), colour = "black", alpha = 0.1) +
-                        geom_line(data = function(x) filter(x, Year == previous_year), lwd = 0.5) +
-                        geom_line(data = function(x) filter(x, Year == this_year), lwd = 0.75) +
-                        theme_bw() +
-                        labs(title = "Nominal income",
-                             y = "Dollars",
-                             x = "Month")
-                ggplotly(i1)
-        })
-        
-        output$seasonal_inflation_adjusted_income <- renderPlotly({
-                this_year <- tail(Yearly_finances$Year)[6]
-                previous_year <- tail(Yearly_finances$Year)[5]
-                i2 <- Finances %>%
-                        mutate(Year = factor(year(Date)),
-                               Date = update(Date, year = 1)) %>%
-                        ggplot(aes(x = Date, y = AdjIncome, colour = Year)) +
-                        scale_x_date(date_breaks = "1 month", date_labels = "%b") +
-                        geom_line(aes(group = Year), colour = "black", alpha = 0.1) +
-                        geom_line(data = function(x) filter(x, Year == previous_year), lwd = 0.5) +
-                        geom_line(data = function(x) filter(x, Year == this_year), lwd = 0.75) +
-                        theme_bw() +
-                        labs(title = "Inflation-adjusted income indexed to Jan 2000",
-                             y = "Dollars",
-                             x = "Month")
-                ggplotly(i2)
-        })
-        
-        ## Expenses overview
-        output$seasonal_expenses <- renderPlotly({
-                this_year <- tail(Yearly_finances$Year)[6]
-                previous_year <- tail(Yearly_finances$Year)[5]
-                e1 <- Finances %>%
-                        mutate(Year = factor(year(Date)),
-                               Date = update(Date, year = 1)) %>%
-                        ggplot(aes(x = Date, y = Expenses, colour = Year)) +
-                        scale_x_date(date_breaks = "1 month", date_labels = "%b") +
-                        geom_line(aes(group = Year), colour = "black", alpha = 0.1) +
-                        geom_line(data = function(x) filter(x, Year == previous_year), lwd = 0.5) +
-                        geom_line(data = function(x) filter(x, Year == this_year), lwd = 0.75) +
-                        theme_bw() +
-                        labs(title = "Nominal expenses",
-                             y = "Dollars",
-                             x = "Month")
-                ggplotly(e1)
-        })
-        
-        output$seasonal_inflation_adjusted_expenses <- renderPlotly({
-                this_year <- tail(Yearly_finances$Year)[6]
-                previous_year <- tail(Yearly_finances$Year)[5]
-                e2 <- Finances %>%
-                        mutate(Year = factor(year(Date)),
-                               Date = update(Date, year = 1)) %>%
-                        ggplot(aes(x = Date, y = AdjExpenses, colour = Year)) +
-                        scale_x_date(date_breaks = "1 month", date_labels = "%b") +
-                        geom_line(aes(group = Year), colour = "black", alpha = 0.1) +
-                        geom_line(data = function(x) filter(x, Year == previous_year), lwd = 0.5) +
-                        geom_line(data = function(x) filter(x, Year == this_year), lwd = 0.75) +
-                        theme_bw() +
-                        labs(title = "Inflation-adjusted expenses indexed to Jan 2000",
-                             y = "Dollars",
-                             x = "Month")
-                ggplotly(e2)
-        })
-        
-        # Categories tab
+        # In Depth tab
         
         ## Data sets
         sub_end <- tail(Finances$Date)[6] %m+% years(1) %>%
@@ -254,45 +235,57 @@ function(input, output, session) {
         
         Tithe_month <- Finances %>%
                 select(Date, Tithe) %>%
-                rename(Nominal = Tithe)
+                rename(Current = Tithe)
         
         Income_month <- Finances %>%
                 select(Date, Income) %>%
-                rename(Nominal = Income)
+                rename(Current = Income)
         
         Expenses_month <- Finances %>%
                 select(Date, Expenses) %>%
-                rename(Nominal = Expenses)
+                rename(Current = Expenses)
         
         Tithe_year <- Yearly_finances %>%
                 select(Year, Tithe, AdjTithe) %>%
-                rename(Nominal = Tithe, 
+                rename(Current = Tithe, 
                        Adjusted = AdjTithe) %>%
                 subset(Year < end)
         
         Income_year <- Yearly_finances %>%
                 select(Year, Income, AdjIncome) %>%
-                rename(Nominal = Income, 
+                rename(Current = Income, 
                        Adjusted = AdjIncome) %>%
                 subset(Year < end)
         
         Expenses_year <- Yearly_finances %>%
                 select(Year, Expenses, AdjExpenses) %>%
-                rename(Nominal = Expenses, 
+                rename(Current = Expenses, 
                        Adjusted = AdjExpenses) %>%
                 subset(Year < end)
         
         Tithe.tsibble <- Finances.tsibble %>%
                 select(Date, Tithe) %>%
-                rename(Nominal = Tithe)
+                rename(Current = Tithe)
         
         Income.tsibble <- Finances.tsibble %>%
                 select(Date, Income) %>%
-                rename(Nominal = Income)
+                rename(Current = Income)
         
         Expenses.tsibble <- Finances.tsibble %>%
                 select(Date, Expenses) %>%
-                rename(Nominal = Expenses)
+                rename(Current = Expenses)
+        
+        Tithe.tsibble2 <- Finances.tsibble2 %>%
+                select(Date, Tithe) %>%
+                rename(Current = Tithe)
+        
+        Income.tsibble2 <- Finances.tsibble2 %>%
+                select(Date, Income) %>%
+                rename(Current = Income)
+        
+        Expenses.tsibble2 <- Finances.tsibble2 %>%
+                select(Date, Expenses) %>%
+                rename(Current = Expenses)
         
         ## Subset end point
         ## Reactive elements
@@ -314,6 +307,36 @@ function(input, output, session) {
                         Expenses_year
         })
         
+        Seasonal_dependent <- reactive({
+                if (input$Category == "Tithe")
+                        Finances %>%
+                        select(Date, Tithe) %>%
+                        rename(Amount = Tithe)
+                else if (input$Category == "Income")
+                        Finances %>%
+                        select(Date, Income) %>%
+                        rename(Amount = Income)
+                else
+                        Finances %>%
+                        select(Date, Expenses) %>%
+                        rename(Amount = Expenses)
+        })
+        
+        Seasonal_inflation_dependent <- reactive({
+                if (input$Category == "Tithe")
+                        Finances %>%
+                        select(Date, AdjTithe) %>%
+                        rename(Amount = AdjTithe)
+                else if (input$Category == "Income")
+                        Finances %>%
+                        select(Date, AdjIncome) %>%
+                        rename(Amount = AdjIncome)
+                else
+                        Finances %>%
+                        select(Date, AdjExpenses) %>%
+                        rename(Amount = AdjExpenses)
+        })
+        
         selected_tsibble <- reactive({
                 if (input$Category == "Tithe")
                    Tithe.tsibble
@@ -321,6 +344,15 @@ function(input, output, session) {
                         Income.tsibble
                 else
                         Expenses.tsibble
+        })
+        
+        selected_tsibble2 <- reactive({
+                if (input$Category == "Tithe")
+                        Tithe.tsibble2
+                else if (input$Category == "Income")
+                        Income.tsibble2
+                else
+                        Expenses.tsibble2
         })
         
         current_year_cat <- reactive({
@@ -346,8 +378,8 @@ function(input, output, session) {
                 
                 p2 <- ggplot(data = Finances_monthly(), aes(x = Date)) +
                         theme_classic() +
-                        geom_line(aes(y = Nominal)) +
-                        geom_smooth(aes(y = Nominal), method = "loess", formula = y ~ x) +
+                        geom_line(aes(y = Current)) +
+                        geom_smooth(aes(y = Current), method = "loess", formula = y ~ x) +
                         labs(y = "Dollars",
                              x = "Year")
                 ggplotly(p2)
@@ -358,8 +390,8 @@ function(input, output, session) {
                 
                 p3 <- ggplot(data = Finances_yearly(), aes(x = Year)) +
                         theme_classic() +
-                        geom_line(aes(y = Nominal, colour = "Nominal")) +
-                        geom_smooth(aes(y = Nominal, colour = "Nominal"), 
+                        geom_line(aes(y = Current, colour = "Current dollars")) +
+                        geom_smooth(aes(y = Current, colour = "Current dollars"), 
                                     method = "loess", formula = y ~ x) +
                         geom_line(aes(y = Adjusted, colour = "Inflation-adjusted")) +
                         geom_smooth(aes(y = Adjusted, colour = "Inflation-adjusted"), 
@@ -369,10 +401,46 @@ function(input, output, session) {
                 ggplotly(p3)
         })
         
+        ## Seasonal graph current dollars
+        output$seasonal_graph <- renderPlotly({
+                this_year <- tail(Yearly_finances$Year)[6]
+                previous_year <- tail(Yearly_finances$Year)[5]
+                s1 <- Seasonal_dependent() %>%
+                        mutate(Year = factor(year(Date)),
+                               Date = update(Date, year = 1)) %>%
+                        ggplot(aes(x = Date, y = Amount, colour = Year)) +
+                        scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+                        geom_line(aes(group = Year), colour = "black", alpha = 0.1) +
+                        geom_line(data = function(x) filter(x, Year == previous_year), lwd = 0.5) +
+                        geom_line(data = function(x) filter(x, Year == this_year), lwd = 0.75) +
+                        theme_bw() +
+                        labs(y = "Current Dollars",
+                             x = "Month")
+                ggplotly(s1)
+        })
+        
+        ## Seasonal graph inflation-adjusted dollars
+        output$seasonal_inflation_graph <- renderPlotly({
+                this_year <- tail(Yearly_finances$Year)[6]
+                previous_year <- tail(Yearly_finances$Year)[5]
+                s2 <- Seasonal_inflation_dependent() %>%
+                        mutate(Year = factor(year(Date)),
+                               Date = update(Date, year = 1)) %>%
+                        ggplot(aes(x = Date, y = Amount, colour = Year)) +
+                        scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+                        geom_line(aes(group = Year), colour = "black", alpha = 0.1) +
+                        geom_line(data = function(x) filter(x, Year == previous_year), lwd = 0.5) +
+                        geom_line(data = function(x) filter(x, Year == this_year), lwd = 0.75) +
+                        theme_bw() +
+                        labs(y = "Real Dollars indexed to Jan 2000",
+                             x = "Month")
+                ggplotly(s2)
+        })
+        
         ## Forecast
         output$forecast_graph <- renderPlot({
                 fit <- selected_tsibble() %>%
-                        model(ARIMA(Nominal))
+                        model(ARIMA(Current))
                 fc <- forecast(fit, h = 12)
                 
                 fc %>%
@@ -382,11 +450,37 @@ function(input, output, session) {
                              title = "Forecast")
         })
         
+        output$forcast_vs_actual <- renderPlotly({
+                fit2 <- selected_tsibble2() %>%
+                        model(ARIMA(Current))
+                fc2 <- forecast(fit2, h = 12)
+                
+                annual_forecast <- fc2 %>%
+                        as_tibble() %>%
+                        transmute(Date = format(Date),
+                                  forecast = .mean) %>%
+                        mutate(Date = as.Date(paste0(Date, '-01'), '%Y %b-%d'))
+                
+                actual <- Finances_monthly() %>%
+                        filter(Date >= end2)
+                
+                avf <- ggplot() +
+                        theme_bw() +
+                        geom_line(data = annual_forecast, aes(x = Date, y = forecast, colour = "forecast")) +
+                        geom_point(data = annual_forecast, aes(x = Date, y = forecast, colour = "forecast")) +
+                        geom_line(data = actual, aes(x = Date, y = Current, colour = "actual")) +
+                        geom_point(data = actual, aes(x = Date, y = Current, colour = "actual")) +
+                        labs(title = "Current Year Forecast vs Actual",
+                             x = "Date",
+                             y = "Amount in dollars")
+                ggplotly(avf)
+        })
+        
         ## Total annual prediction table
         output$total_amount_table <- renderTable({
                 ### Model and forecast
                 fit <- selected_tsibble() %>%
-                        model(ARIMA(Nominal))
+                        model(ARIMA(Current))
                 fc <- forecast(fit, h = 12)
                 
                 ### Add up prediction for rest of calendar year
@@ -423,7 +517,7 @@ function(input, output, session) {
         output$forecast_table <- renderTable({
                 ### Model and forecast
                 fit <- selected_tsibble() %>%
-                        model(ARIMA(Nominal))
+                        model(ARIMA(Current))
                 fc <- forecast(fit, h = 12)
                 
                 ### Table
