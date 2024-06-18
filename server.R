@@ -34,7 +34,7 @@ Ministry_funds <- read_sheet("https://docs.google.com/spreadsheets/d/1d2g7NRipba
 Ministry_funds[-1] <- lapply(Ministry_funds[-1], dollar)
 
 MidwestCPI <- read_table("https://fred.stlouisfed.org/data/CUUR0200SA0.txt", 
-                         skip = 11) %>%
+                         skip = 13) %>%
         filter(DATE >= "2000-01-01") %>%
         rename(Date = DATE, CPI = VALUE) %>%
         mutate_if(is.character, as.numeric)
@@ -90,7 +90,7 @@ Finances <- Finances %>%
 end <- tail(Yearly_finances$Year)[6]
 
 # Overview Table
-current_year <- tail(Yearly_finances)[6,] %>%
+current_year <- tail(Finances)[6,] %>%
         select(Tithe, Income, Expenses, Deficit)
 last_month <- tail(Finances)[6,] %>%
         select(Tithe, Income, Expenses, Deficit)
@@ -133,8 +133,8 @@ byrow = FALSE
 
 colnames(mtd) <- c(paste(last_month_name, end),
                    paste(last_month_name, (end - 1)),
-                   "Year-over-Year change",
-                   "Year-over-Year percent change")
+                   "Change",
+                   "Percent change")
 
 rownames(mtd) <- c("Tithe",
                    "Church budget",
@@ -150,21 +150,21 @@ year_to_date <- Finances %>%
         group_by(Year) %>%
         summarize(across(c(Tithe, Income, Expenses, Deficit), ~sum(.x, na.rm = TRUE)))
 
-ytd_yoy_change <- data.frame(tithe = year_to_date$Tithe[2] - year_to_date$Tithe[1],
-                             income = year_to_date$Income[2] - year_to_date$Income[1],
-                             expenses = year_to_date$Expenses[2] - year_to_date$Expenses[1],
-                             deficit = year_to_date$Deficit[2] - year_to_date$Deficit[1])
+ytd_yoy_change <- data.frame(tithe = (year_to_date$Tithe[2]) - (year_to_date$Tithe[1]),
+                             income = (year_to_date$Income[2]) - (year_to_date$Income[1]),
+                             expenses = (year_to_date$Expenses[2]) - (year_to_date$Expenses[1]),
+                             deficit = (year_to_date$Deficit[2]) - (year_to_date$Deficit[1]))
 
 ytd_yoy_percent_change <- data.frame(tithe = ytd_yoy_change$tithe / year_to_date$Tithe[1],
                                      income = ytd_yoy_change$income / year_to_date$Income[1],
                                      expenses = ytd_yoy_change$expenses / year_to_date$Expenses[1],
                                      deficit = ytd_yoy_change$deficit / year_to_date$Deficit[1])
 
-ytd <- matrix(c(dollar(current_year$Tithe),
+ytd <- matrix(c(dollar(year_to_date$Tithe[2]),
                 " ",
-                dollar(current_year$Income),
-                dollar(current_year$Expenses),
-                dollar(current_year$Deficit),
+                dollar(year_to_date$Income[2]),
+                dollar(year_to_date$Expenses[2]),
+                dollar(year_to_date$Deficit[2]),
                 dollar(year_to_date$Tithe[1]),
                 " ",
                 dollar(year_to_date$Income[1]),
@@ -187,8 +187,8 @@ byrow = FALSE
 
 colnames(ytd) <- c(paste(end, "to date"),
                    paste((end - 1), "to date"),
-                   "Year-over-Year change",
-                   "Year-over-Year percent change")
+                   "Change",
+                   "Percent change")
 
 rownames(ytd) <- c("Tithe",
                    "Church budget",
@@ -210,17 +210,19 @@ function(input, output, session) {
         # Main tab 
         ## Summary table using kableExtra to specify background, indentation, and formating
         output$mtdFinances <- function() ({
-                mtd <- kbl(mtd) %>%
-                        kable_styling(bootstrap_options = c("striped"), full_width = F) %>%
-                        add_indent(c(3,4,5)) %>%
+                mtd <- kbl(mtd) |>
+                        add_header_above(c(" ", " ", " ", "Year-over-year" = 2)) |>
+                        kable_styling(bootstrap_options = c("striped"), full_width = F) |>
+                        add_indent(c(3,4,5)) |>
                         column_spec(1, bold = T)
                 mtd
         })
         
         output$ytdFinances <- function() ({
-                ytd <- kbl(ytd) %>%
-                        kable_styling(bootstrap_options = c("striped"), full_width = F) %>%
-                        add_indent(c(3,4,5)) %>%
+                ytd <- kbl(ytd) |>
+                        add_header_above(c(" ", " ", " ", "Year-over-year" = 2)) |>
+                        kable_styling(bootstrap_options = c("striped"), full_width = F) |>
+                        add_indent(c(3,4,5)) |>
                         column_spec(1, bold = T)
                 ytd
         })
@@ -357,11 +359,11 @@ function(input, output, session) {
         
         current_year_cat <- reactive({
                 if (input$Category == "Tithe")
-                        current_year$Tithe
+                        year_to_date$Tithe[2]
                 else if (input$Category == "Income")
-                        current_year$Income
+                        year_to_date$Income[2]
                 else
-                        current_year$Expenses
+                        year_to_date$Expenses[2]
         })
         
         last_month_cat <- reactive({
