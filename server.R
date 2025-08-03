@@ -15,6 +15,7 @@ library(scales)
 library(fpp3)
 library(urca)
 library(kableExtra)
+library(rvest)
 
 # Set options and authenticate access
 options(scipen = 999)
@@ -33,11 +34,15 @@ Finances <- read_sheet("https://docs.google.com/spreadsheets/d/1DPq4lM36_CcjEGN2
 Ministry_funds <- read_sheet("https://docs.google.com/spreadsheets/d/1d2g7NRipbarvq78LUxuEObWsTru4t4w_TY9uQgQOvZQ/edit#gid=0")
 Ministry_funds[-1] <- lapply(Ministry_funds[-1], dollar)
 
-MidwestCPI <- read_table("https://fred.stlouisfed.org/data/CUUR0200SA0.txt", 
-                         skip = 13) %>%
+URL <- read_html("https://fred.stlouisfed.org/data/CUUR0200SA0.txt")
+table <- html_nodes(URL, "table")
+table_content <- html_table(table)[[2]]
+
+MidwestCPI <- table_content %>%
+        mutate(DATE = as.Date(DATE, format = "%Y-%m-%d")) %>%
+        mutate_if(is.character, as.numeric) %>%
         filter(DATE >= "2000-01-01") %>%
-        rename(Date = DATE, CPI = VALUE) %>%
-        mutate_if(is.character, as.numeric)
+        rename(Date = DATE, CPI = VALUE)
 
 # Wrangle data
 Finances <- inner_join(Finances, MidwestCPI, by = "Date") %>%
@@ -472,7 +477,7 @@ function(input, output, session) {
                         geom_point(data = annual_forecast, aes(x = Date, y = forecast, colour = "forecast")) +
                         geom_line(data = actual, aes(x = Date, y = Current, colour = "actual")) +
                         geom_point(data = actual, aes(x = Date, y = Current, colour = "actual")) +
-                        labs(title = "Current Year Forecast vs Actual",
+                        labs(title = "January Forecast vs Actual",
                              x = "Date",
                              y = "Amount in dollars")
                 ggplotly(avf)
