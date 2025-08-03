@@ -12,7 +12,7 @@
 #
 # Author: James Ryan Milks, Dayton, Ohio, USA
 # Date: 2023 June 6
-# Updated: 2024 Mar 4
+# Updated: 2025 August 2
 
 library(shiny)
 library(mailtoR)
@@ -63,8 +63,9 @@ ui <- fluidPage(
                                         plotlyOutput("seasonal_inflation_graph"),
                                         h3("Annual change over time"),
                                         plotlyOutput("annual_time_graph"),
-                                        h3("Forecast"),
+                                        h3("Current Year January Forecast vs Actual"),
                                         plotlyOutput("forcast_vs_actual"),
+                                        h3("Forecast for Next 12 Months"),
                                         plotOutput("forecast_graph"),
                                         tableOutput("forecast_table")
                                 )
