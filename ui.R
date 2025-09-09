@@ -1,30 +1,21 @@
-#
-# This is the user-interface definition of a Shiny web application. You can
-# run the application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
+
 # This app developed for:
 # Kettering Adventist Church
 # Kettering, Ohio, USA
 #
 # Author: James Ryan Milks, Dayton, Ohio, USA
-# Date: 2023 June 6
-# Updated: 2025 August 2
+# Initialized: 2023 June 6
+# Updated: 2025 September 8
 
+# ---- ui.R ----
 library(shiny)
-library(mailtoR)
 library(plotly)
-library(kableExtra)
 
-# Define user interface
 ui <- fluidPage(
         # Title
         titlePanel("Kettering Adventist Church Financial Overview"),
         
-        # Set tabs
+        # Tabs
         tabsetPanel(
                 # Overview page
                 tabPanel(
@@ -33,24 +24,26 @@ ui <- fluidPage(
                                 sidebarPanel(width = 0),
                                 mainPanel(
                                         h3("Month-to-date"),
-                                        tableOutput("mtdFinances"),
+                                        uiOutput("mtdFinances"),
                                         h3("Year-to-date"),
-                                        tableOutput("ytdFinances")
-                                        )
+                                        uiOutput("ytdFinances")
                                 )
-                        ),
+                        )
+                ),
                 
                 # In-depth Focus
                 tabPanel(
                         "In-Depth",
                         sidebarLayout(
                                 sidebarPanel(
-                                        selectInput(inputId = "Category",
-                                                    label = "Select a category",
-                                                    choices = list("Tithe" = "Tithe",
-                                                                "Church Budget Income" = "Income",
-                                                                "Church Budget Expenses" = "Expenses"),
-                                                    selected = "Tithe")
+                                        selectInput(
+                                                inputId = "Category",
+                                                label   = "Select a category",
+                                                choices = list("Tithe" = "Tithe",
+                                                               "Church Budget Income" = "Income",
+                                                               "Church Budget Expenses" = "Expenses"),
+                                                selected = "Tithe"
+                                        )
                                 ),
                                 mainPanel(
                                         h3("Current and predicted dollar amounts for the year"),
@@ -85,6 +78,7 @@ ui <- fluidPage(
                         )
                 )
         ),
+        
         hr(),
         h5("Created by: Jim Milks"),
         br(),
@@ -92,7 +86,7 @@ ui <- fluidPage(
         br(),
         "Data updated on the 15th of each month",
         br(),
-        a(actionButton(inputId = "email1", label = "Contact Admin", 
+        a(actionButton(inputId = "email1", label = "Contact Admin",
                        icon = icon("envelope", lib = "font-awesome")),
           href = "mailto: jrmilks@gmail.com")
 )
